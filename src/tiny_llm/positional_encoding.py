@@ -9,9 +9,50 @@ class RoPE:
         base: int = 10000,
         traditional: bool = False,
     ):
-        pass
+        self.dims = dims 
+        self.seq_len = seq_len
+        half_dims = dims // 2
+        inner = mx.arange(0, half_dims, dtype=mx.float32) / half_dims
+        freqs = mx.power(base, -inner)
+        t = mx.arange(seq_len)
+        freqs = mx.outer(t, freqs)
+        self.cos_freqs = mx.cos(freqs)
+        self.sin_freqs = mx.sin(freqs)
+        self.base = base
+        self.half_dims = half_dims
+        self.traditional = traditional
 
     def __call__(
         self, x: mx.array, offset: list[slice] | slice | None = None
     ) -> mx.array:
-        pass
+        N, S, H, D = x.shape 
+        if offset is not None and isinstance(offset, list):
+            offset = mx.array([list(range(i.start, i.stop)) for i in offset])
+        cos_basis = (
+            self.cos_freqs[:S, :] if offset is None else self.cos_freqs[offset, :]
+        )
+        sin_basis = (
+            self.sin_freqs[:S, :] if offset is None else self.sin_freqs[offset, :]
+        ) 
+
+        if self.traditional:
+            x = x.reshape(N, S, H, self.half_dims, 2)
+            x1 = x[..., 0]
+            x2 = x[..., 1]
+        else:
+            x1 = x[..., 0 : self.half_dims]
+            x2 = x[..., self.half_dims : self.dims]
+
+        cos_basis = cos_basis.reshape(-1, S, 1, self.half_dims)
+        sin_basis = sin_basis.reshape(-1, S, 1, self.half_dims)
+
+        real = mx.multiply(x1, cos_basis) - mx.multiply(x2, sin_basis)
+        imag = mx.multiply(x2, cos_basis) + mx.multiply(x1, sin_basis)
+
+        if self.traditional:
+            y = mx.stack([real, imag], axis=-1)
+            y = y.reshape(N, S, H, D)
+        else:
+            y = mx.concat([real, imag], axis=-1)
+            y = y.reshape(N, S, H, D)
+        return y.astype(x.dtype)

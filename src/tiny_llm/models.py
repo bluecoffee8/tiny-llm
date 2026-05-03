@@ -1,6 +1,6 @@
 from .qwen2_week1 import Qwen2ModelWeek1
 from .qwen2_week2 import Qwen2ModelWeek2
-from .qwen2_week3 import Qwen2ModelWeek3
+# from .qwen2_week3 import Qwen2ModelWeek3
 from .qwen3 import Qwen3Model
 
 
